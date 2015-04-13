@@ -119,7 +119,7 @@ public class DataExtractor {
 		citedAuthors= insensitiveSort(citedAuthors);
 		
 		for (int i = 0; i < citedAuthors.size(); i++) {
-			System.out.println(citedAuthors.get(i));
+			System.out.println(i+ "->" +citedAuthors.get(i));
 		}
 
 
@@ -138,7 +138,7 @@ public class DataExtractor {
 		authors= insensitiveSort(authors);
 
 		for (int i = 0; i < authors.size(); i++) {
-			System.out.println(authors.get(i));
+			System.out.println(i+ "->" +authors.get(i));
 		}
 
 	}
@@ -156,7 +156,7 @@ public class DataExtractor {
 		articles= insensitiveSort(articles);
 
 		for (int i = 0; i < articles.size(); i++) {
-			System.out.println(articles.get(i));
+			System.out.println(i+ "->" +articles.get(i));
 		}
 
 	}
