@@ -27,6 +27,7 @@ public class DataExtractor {
 
 	static ArrayList<String> articles = new  ArrayList<String>();;
 	static ArrayList<String> authors = new  ArrayList<String>();;
+	static ArrayList<String> citedAuthors = new  ArrayList<String>();;
 
 	
 	
@@ -76,27 +77,36 @@ public class DataExtractor {
 		       
 		        XPathExpression exprTitles = xpath.compile("/Publisher/Journal/Volume/Issue/Article/ArticleInfo/ArticleTitle");
 		     //   XPathExpression exprAuthors = xpath.compile("/Publisher/Journal/Volume/Issue/Article/ArticleHeader/AuthorGroup/Author/AuthorName/*[self::GivenName or self::FamilyName]");
-		       String nameExp ="/Publisher/Journal/Volume/Issue/Article/ArticleHeader/AuthorGroup/Author/AuthorName";
+		        NodeList nodesTitles = (NodeList) exprTitles.evaluate(doc, XPathConstants.NODESET);
+		        /*RETURN */
+			       // addArticleTitles(nodesTitles);
+			    
+			    
+		        
+		        String nameExp ="/Publisher/Journal/Volume/Issue/Article/ArticleHeader/AuthorGroup/Author/AuthorName";
 		     //  String familyExp ="/Publisher/Journal/Volume/Issue/Article/ArticleHeader/AuthorGroup/Author/AuthorName/FamilyName";
 		      // String concatName = "concat(" + familyExp + ", " + nameExp+")";
-
 		       XPathExpression exprAuthors = xpath.compile(nameExp);
-		        
-		        
-		        
-		        
-		     // XPath  executing xpath expression in java
-		        //Object result = expr.evaluate(doc);
-		        NodeList nodesTitles = (NodeList) exprTitles.evaluate(doc, XPathConstants.NODESET);
-		      
 		        NodeList nodesAuthors = (NodeList) exprAuthors.evaluate(doc, XPathConstants.NODESET);
+		        /* RETURN */
+			       // addArticleAuthors(nodesAuthors);
 
+			  
+		       /*
+		        * THIS SPEC WAS WRONG!
+		        * Publisher/Journal/Volume/Issue/Article/Bibliography/Citation
+		        */
+		       String citedAuthors = "/Publisher/Journal/Volume/Issue/Article/ArticleBackmatter/Bibliography/Citation";
+		       XPathExpression exprCitedAuthors = xpath.compile(citedAuthors);		  
+		       NodeList nodesCited = (NodeList) exprCitedAuthors.evaluate(doc, XPathConstants.NODESET);
+		       addArticleCitedAuthors(nodesCited);
+
+
+		        
 		      //  printXpathResult(nodesTitles);
 		        
-		       // addArticleTitles(nodesTitles);
-		    
-		        addArticleAuthors(nodesAuthors);
-
+		        
+		        
 		        
 		       // System.out.println("Titles of Articles in:"+ xmlFile.getName());
 		        //printXpathResult(nodeList);
@@ -140,11 +150,25 @@ public class DataExtractor {
 		    });
 
 		  
-		  System.out.println(authors.size());
+		 /* System.out.println(authors.size());
 		  for(int i=0; i<authors.size(); i++){
 			    System.out.println(authors.get(i));
 		  }
+		  */
 		  
+			// sorting ignoring case
+		  Collections.sort(citedAuthors, new Comparator<String>() {
+		        @Override
+		        public int compare(String s1, String s2) {
+		            return s1.compareToIgnoreCase(s2);
+		        }
+		    });
+		  
+		  
+		  System.out.println(citedAuthors.size());
+		  for(int i=0; i<citedAuthors.size(); i++){
+			    System.out.println(citedAuthors.get(i));
+		  }
 		  
 		  // iterateOverNodes(doc.getDocumentElement());
 			
@@ -154,41 +178,42 @@ public class DataExtractor {
 	 * Recursively iterates over the node's children
 	 * @param node
 	 */
-	public static String getAuthorsName(Node node) {
+	public static LinkedList<String> getCitedAuthorsName(Node node) {
 	    // do something with the current node instead of System.out
-		return getAuthorsName(node, false, false, "").trim();
+		LinkedList<String>names = new LinkedList<String>();
+		return getCitedAuthorsName(node, false, false, "",names);
 	}
 	
-	public static String getAuthorsName(Node node, boolean haveGiven, boolean haveFamily, String name) {
+	public static LinkedList<String> getCitedAuthorsName(Node node, boolean haveGiven, boolean haveFamily, String currentName, LinkedList<String> names) {
 		   
 	//	System.out.println(node.getNodeName());
 
 	    NodeList nodeList = node.getChildNodes();
-	    for (int i = 0; i < nodeList.getLength(); i++) {
+	    int length = nodeList.getLength();
+		for (int i = 0; i < length; i++) {
 	        Node currentNode = nodeList.item(i);
-	        if (currentNode.getNodeType() == Node.ELEMENT_NODE) {
+	        short nodeType = currentNode.getNodeType();
+			if (nodeType == Node.ELEMENT_NODE) {
 	        	String tag= currentNode.getNodeName();
-	        	if (tag.equals("GivenName")){
-	        		haveGiven = true;
-	        		Node itemChild = currentNode.getFirstChild();
-	        		name = name + itemChild.getNodeValue().trim();
-	        	}
-	        	
-	        	if (tag.equals("FamilyName")){
-	        		haveFamily = true;
-	        		Node itemChild = currentNode.getFirstChild();
-	        		name = itemChild.getNodeValue().trim() + " "+name;
-	        	}
-	        	
-	            	
+	        	if (tag.equals("Initials")){
+	        		currentName = currentName + " "+currentNode.getFirstChild().getNodeValue();
+					 haveGiven = true;
+				}
+	         	if (tag.equals("FamilyName")){
+	         		currentName =  currentNode.getFirstChild().getNodeValue() + currentName;
+					 haveFamily = true ;
+				}
+	         	
 	        	if (haveGiven && haveFamily){
-	        		return name;
+	        		names.add(currentName);
+	        		return names;
 	        	}else{
-	        		getAuthorsName(currentNode,haveGiven, haveFamily, name );
+	        		getCitedAuthorsName(currentNode,haveGiven, haveFamily, currentName,names );
 	        	}
 	        }
+		
 	    }
-		return name;
+		return names;
 	}// end  iterateOverNodes
 	
 	
@@ -270,8 +295,71 @@ public class DataExtractor {
             //System.out.println(item.getFirstChild().getNodeValue());
         }
 	}
+	
+	
+	
+	
+	
+	private static void addArticleCitedAuthors(NodeList nodeList ){
+	    //Adding titles to the list of articles
+		
+		//System.out.println(nodeList.getLength());
+        for (int i = 0; i < nodeList.getLength(); i++) {
+        	
+        	Node author = nodeList.item(i);
+        	LinkedList<String> names = getCitedAuthorsName(author);
+        	//System.out.println(fullName);
+        	
+        	for (String fullName: names){
+            	if (!citedAuthors.contains(fullName)){
+            		citedAuthors.add(fullName); 
+            	}
+        		
+        	}
+        }
+	}
 
 
+	
+	private static String getAuthorsName(Node node) {
+	    // do something with the current node instead of System.out
+		return getAuthorsName(node, false, false, "").trim();
+	}
+	
+	private static String getAuthorsName(Node node, boolean haveGiven, boolean haveFamily, String name) {
+		   
+	//	System.out.println(node.getNodeName());
+
+	    NodeList nodeList = node.getChildNodes();
+	    for (int i = 0; i < nodeList.getLength(); i++) {
+	        Node currentNode = nodeList.item(i);
+	        
+	        
+	        if (currentNode.getNodeType() == Node.ELEMENT_NODE) {
+	        	String tag= currentNode.getNodeName();
+	        	if (tag.equals("GivenName")){
+	        		haveGiven = true;
+	        		Node itemChild = currentNode.getFirstChild();
+	        		name = name + itemChild.getNodeValue().trim();
+	        	}
+	        	
+	        	if (tag.equals("FamilyName")){
+	        		haveFamily = true;
+	        		Node itemChild = currentNode.getFirstChild();
+	        		name = itemChild.getNodeValue().trim() + " "+name;
+	        	}
+	        	
+	            	
+	        	if (haveGiven && haveFamily){
+	        		return name;
+	        	}else{
+	        		getAuthorsName(currentNode,haveGiven, haveFamily, name );
+	        	}
+	        }
+	    }
+		return name;
+	}// end  iterateOverNodes
+	
 	
 
 }
