@@ -12,6 +12,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathException;
 import javax.xml.xpath.XPathExpression;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
@@ -27,16 +28,16 @@ public class DataExtractor {
 	static ArrayList<String> articles = new ArrayList<String>();;
 	static ArrayList<String> authors = new ArrayList<String>();;
 	static ArrayList<String> citedAuthors = new ArrayList<String>();;
-
+	static LinkedList<Article> listofArticles = new LinkedList<Article>();
+	
 	/**
 	 * @param args
-	 * @throws XPathExpressionException
 	 * @throws IOException
 	 * @throws SAXException
+	 * @throws XPathException 
 	 */
 
-	public static void main(String[] args) throws XPathExpressionException,
-			SAXException, IOException {
+	public static void main(String[] args) throws SAXException, IOException, XPathException {
 		String articlePath = "";
 		String task = "";
 		int intTask = 0;
@@ -44,7 +45,7 @@ public class DataExtractor {
 		if (args.length > 0) {
 			articlePath = args[0];
 			task = args[1];
-			intTask= Integer.parseInt(task);
+			intTask = Integer.parseInt(task);
 		} else {
 			System.out
 					.println("You must enter two arguments: the absolute path to get the articles and the test to perform (1-n)");
@@ -55,44 +56,107 @@ public class DataExtractor {
 		IOUtils xmlIO = new IOUtils(articlePath);
 		LinkedList<Document> docs = IOUtils.getDocsFromDirectory();
 
-	
-			try {
+		try {
 
-				switch (intTask) {
-				case 1:
-					getTitles(docs);
-					break;
-				case 2:
-					getAuthors(docs);
-					break;
-				case 3:
-					getCitedAuthors(docs);
-					/*
-					 * THIS SPEC WAS WRONG!
-					 * Publisher/Journal/Volume/Issue/Article
-					 * /Bibliography/Citation
-					 */
+			switch (intTask) {
+			case 1:
+				getTitles(docs);
+				break;
+			case 2:
+				getAuthors(docs);
+				break;
+			case 3:
+				getCitedAuthors(docs);
+				/*
+				 * THIS SPEC WAS WRONG! Publisher/Journal/Volume/Issue/Article
+				 * /Bibliography/Citation
+				 */
 
-					break;
-				default:
-					System.out.println("Not a Valid Task");
-					break;
-				}
-
-			} catch (XPathExpressionException e) {
-				System.out.println("Bad Xpath");
+				break;
+			case 4:
+				getCrossReference(docs);
+				break;
+			default:
+				System.out.println("Not a Valid Task");
+				break;
 			}
 
-		
-
-
-	
-
+		} catch (XPathExpressionException e) {
+			System.out.println("Bad Xpath");
+		}
 
 	}
 
 	/**
-	 * Sorting  an array ignoring case
+	 * Extracts a cross-reference of articles cited by other articles in the
+	 * corpus
+	 * 
+	 * NOTE: HERE I AM ASSUMING THAT THERE IS A SINGLE ARTICLE PER FILE
+	 * 
+	 * @param docs
+	 * @throws XPathException 
+	 */
+	private static void getCrossReference(LinkedList<Document> docs) throws XPathException {
+
+		
+		
+		for (Document doc : docs) {
+
+			XMLDoc workingDoc = new XMLDoc(doc);
+
+			String DoiExp = "//ArticleDOI";
+			NodeList nodesDOIs = workingDoc.evaluateXPathString(DoiExp);
+			
+			//printXpathResult(nodesDOIs);
+			//System.out.println("------------------");
+			
+			String DoiCited= "//Occurrence[@Type='DOI']/Handle";
+			NodeList nodesCitedDOIs = workingDoc.evaluateXPathString(DoiCited);
+			
+			//printXpathResult(nodesCitedDOIs);
+			//System.out.println("------------------");
+			
+			//Filling the list of articles
+			addCrossArticle(nodesDOIs,nodesCitedDOIs);
+			
+			
+		}
+		//printing the relations
+		for (Article citedart: listofArticles){
+			//Picking an article
+			String isCiteddoi = citedart.getDoi();
+			
+			//going through the rest and checking if someone is citing it
+			for (Article citingArt: listofArticles){
+				
+				if (citingArt.getCitedDois().contains(isCiteddoi)){
+					String citingdoi = citingArt.getDoi();
+					System.out.println("The Article "+ isCiteddoi +" is cited by  " +citingdoi);
+				}
+			}
+			
+		}
+
+	}
+
+	private static void addCrossArticle(NodeList nodesDOIs,
+			NodeList nodesCitedDOIs) {
+		LinkedList<String> cited = new LinkedList<String>();	
+		String currentDoi=	nodesDOIs.item(0).getFirstChild().getNodeValue();
+		
+		//Adding cited DOI into a list
+		for (int i = 0; i < nodesCitedDOIs.getLength(); i++) {
+			cited.add(nodesCitedDOIs.item(i).getFirstChild().getNodeValue());
+		}
+		//System.out.println(currentDoi);
+		Article newArticle= new Article(currentDoi,cited);
+		listofArticles.add(newArticle);
+		
+	}
+
+	/**
+	 * Sorting an array ignoring case
+	 * 
 	 * @param list
 	 * @return
 	 */
@@ -106,57 +170,75 @@ public class DataExtractor {
 		return list;
 	}
 
+	/**
+	 * Extract a canonical alphabetical list of all the authors of cited
+	 * articles.
+	 * 
+	 * @param docs
+	 * @throws XPathExpressionException
+	 */
 	private static void getCitedAuthors(LinkedList<Document> docs)
 			throws XPathExpressionException {
 		for (Document doc : docs) {
 
 			XMLDoc workingDoc = new XMLDoc(doc);
 
-		String citedAuthors = "/Publisher/Journal/Volume/Issue/Article/ArticleBackmatter/Bibliography/Citation";
-		NodeList nodesCited = workingDoc.evaluateXPathString(citedAuthors);
-		addArticleCitedAuthors(nodesCited);
+			String citedAuthors = "/Publisher/Journal/Volume/Issue/Article/ArticleBackmatter/Bibliography/Citation";
+			NodeList nodesCited = workingDoc.evaluateXPathString(citedAuthors);
+			addArticleCitedAuthors(nodesCited);
 		}
-		citedAuthors= insensitiveSort(citedAuthors);
-		
-		for (int i = 0; i < citedAuthors.size(); i++) {
-			System.out.println(i+ "->" +citedAuthors.get(i));
-		}
+		citedAuthors = insensitiveSort(citedAuthors);
 
+		for (int i = 0; i < citedAuthors.size(); i++) {
+			System.out.println(i + "->" + citedAuthors.get(i));
+		}
 
 	}
 
+	/**
+	 * Extract a canonical alphabetic list of all of articles authors.
+	 * 
+	 * @param docs
+	 * @throws XPathExpressionException
+	 */
 	private static void getAuthors(LinkedList<Document> docs)
 			throws XPathExpressionException {
 		for (Document doc : docs) {
 
 			XMLDoc workingDoc = new XMLDoc(doc);
 
-		String nameExp = "/Publisher/Journal/Volume/Issue/Article/ArticleHeader/AuthorGroup/Author/AuthorName";
-		NodeList nodesNames = workingDoc.evaluateXPathString(nameExp);
-		addArticleAuthors(nodesNames);
+			String nameExp = "/Publisher/Journal/Volume/Issue/Article/ArticleHeader/AuthorGroup/Author/AuthorName";
+			NodeList nodesNames = workingDoc.evaluateXPathString(nameExp);
+			addArticleAuthors(nodesNames);
 		}
-		authors= insensitiveSort(authors);
+		authors = insensitiveSort(authors);
 
 		for (int i = 0; i < authors.size(); i++) {
-			System.out.println(i+ "->" +authors.get(i));
+			System.out.println(i + "->" + authors.get(i));
 		}
 
 	}
 
+	/**
+	 * Extract a canonical alphabetical list of all the article titles.
+	 * 
+	 * @param docs
+	 * @throws XPathExpressionException
+	 */
 	private static void getTitles(LinkedList<Document> docs)
 			throws XPathExpressionException {
 		for (Document doc : docs) {
 
 			XMLDoc workingDoc = new XMLDoc(doc);
 
-		String xpathTitles = "/Publisher/Journal/Volume/Issue/Article/ArticleInfo/ArticleTitle";
-		NodeList nodesTitles = workingDoc.evaluateXPathString(xpathTitles);
-		addArticleTitles(nodesTitles);
+			String xpathTitles = "/Publisher/Journal/Volume/Issue/Article/ArticleInfo/ArticleTitle";
+			NodeList nodesTitles = workingDoc.evaluateXPathString(xpathTitles);
+			addArticleTitles(nodesTitles);
 		}
-		articles= insensitiveSort(articles);
+		articles = insensitiveSort(articles);
 
 		for (int i = 0; i < articles.size(); i++) {
-			System.out.println(i+ "->" +articles.get(i));
+			System.out.println(i + "->" + articles.get(i));
 		}
 
 	}
@@ -236,10 +318,10 @@ public class DataExtractor {
 
 			Node item = nodeList.item(i);
 			Node itemChild = item.getFirstChild();
-			
+
 			String nodeValue = itemChild.getNodeValue().trim();
-			if (!articles.contains(nodeValue) && !nodeValue.isEmpty()){
-				articles.add(nodeValue);				
+			if (!articles.contains(nodeValue) && !nodeValue.isEmpty()) {
+				articles.add(nodeValue);
 			}
 
 			// System.out.println(item.getFirstChild().getNodeValue());
