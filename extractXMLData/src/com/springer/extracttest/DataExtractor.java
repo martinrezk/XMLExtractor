@@ -236,7 +236,11 @@ public class DataExtractor {
 
 			Node item = nodeList.item(i);
 			Node itemChild = item.getFirstChild();
-			articles.add(itemChild.getNodeValue());
+			
+			String nodeValue = itemChild.getNodeValue().trim();
+			if (!articles.contains(nodeValue) && !nodeValue.isEmpty()){
+				articles.add(nodeValue);				
+			}
 
 			// System.out.println(item.getFirstChild().getNodeValue());
 		}
@@ -259,7 +263,7 @@ public class DataExtractor {
 			 * if (tag.equals("FamilyName")){ Node itemChild =
 			 * item.getFirstChild(); last = itemChild.getNodeValue(); }
 			 */
-			if (!authors.contains(fullName)) {
+			if (!authors.contains(fullName) && !fullName.isEmpty()) {
 				authors.add(fullName);
 			}
 			// System.out.println(item.getFirstChild().getNodeValue());
@@ -277,7 +281,7 @@ public class DataExtractor {
 			// System.out.println(fullName);
 
 			for (String fullName : names) {
-				if (!citedAuthors.contains(fullName)) {
+				if (!citedAuthors.contains(fullName) && !fullName.isEmpty()) {
 					citedAuthors.add(fullName);
 				}
 
